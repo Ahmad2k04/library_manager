@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Library Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+</head>
+<style>
+    body {
+        font-family: 'Poppins', sans-serif;
+    }
+    .heart {
+        animation: heartbeat 1.5s ease-in-out infinite;
+    }
+    @keyframes heartbeat {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.2); }
+        100% { transform: scale(1); }
+    }
+    .star {
+        position: absolute;
+        animation: twinkle 1.5s ease-in-out infinite;
+    }
+    @keyframes twinkle {
+        0% { opacity: 0.3; }
+        50% { opacity: 1; }
+    }
+    .text-shadow {
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+    }
+</style>
+<body class="bg-green-50 h-screen flex items-center justify-center">
+    <div class="w-full lg:w-1/3 px-4 py-8">
+        <!-- Library Manager -->
+        <div class="bg-indigo-100 rounded-lg shadow-lg p-6">
+            <!-- Library Manager Title with Shadow -->
+            <h2 class="text-3xl font-bold text-indigo-800 mb-4 text-shadow">Library Manager</h2>
+            <form id="bookForm" class="space-y-4">
+                <input type="text" id="bookTitle" placeholder="Book Title" class="w-full p-2 border rounded border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                <input type="text" id="bookAuthor" placeholder="Author" class="w-full p-2 border rounded border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                <select id="bookStatus" class="w-full p-2 border rounded border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                    <option value="available">Available</option>
+                    <option value="borrowed">Borrowed</option>
+                </select>
+                <input type="text" id="borrower" placeholder="Borrower Name" class="w-full p-2 border rounded border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                <input type="date" id="returnDate" placeholder="Return Date" class="w-full p-2 border rounded border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                <button type="submit" class="w-full bg-indigo-600 text-white p-2 rounded hover:bg-indigo-700 transition duration-200">Add Book</button>
+            </form>
+            <div id="bookList" class="mt-6 space-y-2"></div>
+        </div>
+    </div>
+
+    <script>
+        const bookForm = document.getElementById('bookForm');
+        const bookList = document.getElementById('bookList');
+        let books = JSON.parse(localStorage.getItem('books') || '[]');
+
+        async function saveBook(bookData) {
+            try {
+                const response = await fetch('https://r0c8kgwocscg8gsokogwwsw4.zetaverse.one/db', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer cheVlCe8XzWYVflO9UG94wZiIkz1',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        userId: localStorage.getItem('userId') || 'user' + Date.now(),
+                        appSlug: 'library-manager',
+                        action: 'create',
+                        table: 'books',
+                        data: bookData
+                    })
+                });
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error('Error saving book:', error);
+            }
+        }
+
+        // Handle book form submission
+        bookForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const book = {
+                title: document.getElementById('bookTitle').value,
+                author: document.getElementById('bookAuthor').value,
+                status: document.getElementById('bookStatus').value,
+                borrower: document.getElementById('borrower').value,
+                returnDate: document.getElementById('returnDate').value || null,
+            };
+            await saveBook(book);
+            books.push(book);
+            localStorage.setItem('books', JSON.stringify(books));
+            displayBooks();
+            bookForm.reset();
+        });
+
+        // Function to calculate fine based on the overdue days
+        function calculateFine(returnDate) {
+            const today = new Date();
+            const returnDateObj = new Date(returnDate);
+            if (returnDateObj < today) {
+                const timeDifference = today - returnDateObj;
+                const daysOverdue = Math.ceil(timeDifference / (1000 * 3600 * 24)); // Convert milliseconds to days
+                const fine = daysOverdue * 10; // 10 rupees per day
+                console.log(`Book is overdue by ${daysOverdue} days. Fine: ₹${fine}`);
+                return fine;
+            }
+            return 0;
+        }
+
+        // Function to display books
+        function displayBooks() {
+            bookList.innerHTML = books.map((book, index) => {
+                let fine = 0;
+                if (book.status === 'borrowed' && book.returnDate) {
+                    fine = calculateFine(book.returnDate);
+                }
+
+                return `
+                    <div class="bg-gray-100 p-3 rounded shadow-md ${fine > 0 ? 'bg-red-100' : ''}">
+                        <h3 class="font-bold text-indigo-800">${book.title}</h3>
+                        <p class="text-gray-700">Author: ${book.author}</p>
+                        <p class="text-gray-700">Status: ${book.status}</p>
+                        ${book.borrower ? `<p class="text-gray-700">Borrower: ${book.borrower}</p>` : ''}
+                        ${book.returnDate ? `<p class="text-gray-700">Return Date: ${new Date(book.returnDate).toLocaleDateString()}</p>` : ''}
+                        ${fine > 0 ? `<p class="text-red-500">Overdue! Fine: ₹${fine}</p>` : ''}
+                        <button onclick="deleteBook(${index})" class="text-red-500 hover:text-red-600 transition duration-200">Delete</button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Delete a book
+        function deleteBook(index) {
+            books.splice(index, 1);
+            localStorage.setItem('books', JSON.stringify(books));
+            displayBooks();
+        }
+
+        // Initialize the book list when the page loads
+        displayBooks();
+    </script>
+</body>
+</html>
